@@ -2,17 +2,16 @@ package main
 
 import (
 	"bytes"
-	"fmt"
+	"encoding/json"
 	"io/ioutil"
 	"net"
 	"net/http"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/elazarl/goproxy"
 	log "github.com/xxzl0130/AntiRivercrab/pkg/log"
 	"github.com/xxzl0130/AntiRivercrab/pkg/cipher"
+	"github.com/xxzl0130/AntiRivercrab/pkg/util"
 )
 
 var sign string
@@ -23,7 +22,7 @@ func main() {
 		log.Fatalf("获取代理地址失败 -> %+v", err)
 	}
 
-	log.Tipsf("代理地址 -> %s:%d", localhost, rs.conf.Listen)
+	log.Tipsf("代理地址 -> %s:%d", localhost, 8888)
 
 	srv := goproxy.NewProxyHttpServer()
 	srv.Logger = new(util.NilLogger)
@@ -32,12 +31,6 @@ func main() {
 	if err := http.ListenAndServe(":8888", srv); err != nil {
 		log.Fatalf("启动代理服务器失败 -> %+v", err)
 	}
-}
-
-type response struct {
-	Host string
-	Path string
-	Body []byte
 }
 
 func onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
@@ -52,26 +45,26 @@ func onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 		log.Errorf("读取响应数据失败 -> %+v", err)
 		return resp
 	}
-	if strings.HasSuffix(resp.Path,"/Index/getDigitalSkyNbUid"){
+	if strings.HasSuffix(ctx.Req.URL.Path,"/Index/getDigitalSkyNbUid"){
 		data, err := cipher.AuthCodeDecodeB64(string(body)[1:], "yundoudou", true)
 		if err != nil {
 			log.Errorf("解析Uid数据失败 -> %+v", err)
-			return
+			return resp
 		}
 		uid := Uid{}
 		if err := json.Unmarshal([]byte(data), &uid); err != nil {
 			log.Errorf("解析JSON数据失败 -> %+v", err)
-			return
+			return resp
 		}
-		key = uid.Sign
-		return
-	} else if strings.HasSuffix(resp.Path,"/Index/index"){
-		data, err := cipher.AuthCodeDecodeB64(string(body)[1:], key, true)
+		sign = uid.Sign
+		return resp
+	} else if strings.HasSuffix(ctx.Req.URL.Path,"/Index/index"){
+		data, err := cipher.AuthCodeDecodeB64(string(body)[1:], sign, true)
 		if err != nil {
 			log.Errorf("解析用户数据失败 -> %+v", err)
-			return
+			return resp
 		}
-		body = string.replace(data,"\"naive_build_gun_formula\": \"\"","\"naive_build_gun_formula\":\"33:33:33:33\"",1)
+		body = []byte(strings.Replace(data,"\"naive_build_gun_formula\": \"\"","\"naive_build_gun_formula\":\"33:33:33:33\"",1))
 	}
 	resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 
