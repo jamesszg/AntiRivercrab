@@ -14,7 +14,7 @@ import (
 	"github.com/elazarl/goproxy"
 	"github.com/pkg/errors"
 	log_std "github.com/xxzl0130/AntiRivercrab/pkg/log"
-	cipher "github.com/xxzl0130/GF_cipher"
+	cipher "github.com/xxzl0130/AntiRivercrab/GF_cipher"
 	"github.com/xxzl0130/AntiRivercrab/pkg/util"
 )
 
