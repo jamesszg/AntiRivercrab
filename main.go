@@ -19,9 +19,14 @@ import (
 	"github.com/xxzl0130/AntiRivercrab/pkg/util"
 )
 
+type SignInfo struct {
+	sign string
+	time int64
+}
+
 type AntiRivercrab struct {
 	log  log_std.Logger
-	sign string
+	sign map[string]SignInfo
 	pattern string
 	replacement string
 }
@@ -34,7 +39,7 @@ func main() {
 
 	ar := &AntiRivercrab{
 		log:  log,
-		sign : "",
+		sign : make(map[string]SignInfo) ,
 		pattern : "\"naive_build_gun_formula\":\"(\\d+:\\d+:\\d+:\\d+)?\"",
 		replacement : "\"naive_build_gun_formula\":\"33:33:33:33\"",
 	}
@@ -43,10 +48,24 @@ func main() {
 	}
 }
 
+func (ar *AntiRivercrab) watchdog(){
+	for{
+		time.Sleep(time.Second * 60 * 10)
+		now := time.Now().Unix()
+		for k,v := range ar.sign{
+			if now - v.time > (60 * 10){
+				fmt.Printf("delete %s\n",k)
+				delete(ar.sign,k)
+			}
+		}
+	}
+}
+
 func (ar *AntiRivercrab) Run() error {
 	localhost, err := ar.getLocalhost()
 	if err != nil {
 		ar.log.Fatalf("获取代理地址失败 -> %+v", err)
+		return err
 	}
 
 	ar.log.Tipsf("代理地址 -> %s:%d", localhost, 8888)
@@ -71,10 +90,8 @@ func (ar *AntiRivercrab) Run() error {
 		Addr:         ":3000",
 		Handler:      mux,
 	}
-	err = fileSrv.ListenAndServe()
-	if err != nil {
-		ar.log.Fatalf("启动代理服务器失败 -> %+v", err)
-	}
+	go ar.watchdog()
+	fileSrv.ListenAndServe()
 	return nil
 }
 
@@ -84,6 +101,14 @@ func (ar *AntiRivercrab) onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) 
 	}
 
 	ar.log.Infof("处理请求响应 -> %s", path(ctx.Req))
+
+	var remote string
+	if resp.Request != nil {
+		s := strings.Split(resp.Request.RemoteAddr,":")
+		remote = s[0]
+	}else{
+		return resp
+	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -104,12 +129,17 @@ func (ar *AntiRivercrab) onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) 
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			return resp
 		}
-		ar.sign = uid.Sign
+		info := SignInfo{
+			sign: uid.Sign,
+			time: time.Now().Unix(),
+		}
+		ar.sign[remote] = info
 		ar.log.Infof("解析Uid成功")
 		resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		return resp
 	} else if strings.HasSuffix(ctx.Req.URL.Path,"/Index/index"){
-		data, err := cipher.AuthCodeDecodeB64(string(body)[1:], ar.sign, true)
+		sign := ar.sign[remote].sign
+		data, err := cipher.AuthCodeDecodeB64(string(body)[1:], sign, true)
 		if err != nil {
 			ar.log.Errorf("解析用户数据失败 -> %+v", err)
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
@@ -117,7 +147,7 @@ func (ar *AntiRivercrab) onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) 
 		}
 		ar.log.Infof("解析用户数据成功")
 		body = []byte(regexp.MustCompile(ar.pattern).ReplaceAll([]byte(data), []byte(ar.replacement)))
-		tmp,err := cipher.AuthCodeEncodeB64(string(body),ar.sign)
+		tmp,err := cipher.AuthCodeEncodeB64(string(body),sign)
 		body = []byte("#" + tmp)
 		if(err != nil){
 			ar.log.Errorf("打包用户数据失败 -> %+v", err)
