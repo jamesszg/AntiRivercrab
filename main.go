@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"regexp"
+	"path/filepath"
 
 	"github.com/elazarl/goproxy"
 	"github.com/pkg/errors"
@@ -50,14 +51,30 @@ func (ar *AntiRivercrab) Run() error {
 
 	ar.log.Tipsf("代理地址 -> %s:%d", localhost, 8888)
 
-	srv := goproxy.NewProxyHttpServer()
-	srv.Logger = new(util.NilLogger)
-	srv.OnResponse(ar.condition()).DoFunc(ar.onResponse)
-
-	if err := http.ListenAndServe(":8888", srv); err != nil {
-		ar.log.Fatalf("启动代理服务器失败 -> %+v", err)
+	proxy := goproxy.NewProxyHttpServer()
+	proxy.Logger = new(util.NilLogger)
+	proxy.OnResponse(ar.condition()).DoFunc(ar.onResponse)
+	srv := &http.Server{
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		Addr:         ":8888",
+		Handler:      proxy,
 	}
 
+	go srv.ListenAndServe()
+
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.Dir("."+string(filepath.Separator)+"PACFile")))
+	fileSrv := &http.Server{
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		Addr:         ":3000",
+		Handler:      mux,
+	}
+	err = fileSrv.ListenAndServe()
+	if err != nil {
+		ar.log.Fatalf("启动代理服务器失败 -> %+v", err)
+	}
 	return nil
 }
 
@@ -100,6 +117,8 @@ func (ar *AntiRivercrab) onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) 
 		}
 		ar.log.Infof("解析用户数据成功")
 		body = []byte(regexp.MustCompile(ar.pattern).ReplaceAll([]byte(data), []byte(ar.replacement)))
+		tmp,err := cipher.AuthCodeEncodeB64(string(body),ar.sign)
+		body = []byte("#" + tmp)
 		if(err != nil){
 			ar.log.Errorf("打包用户数据失败 -> %+v", err)
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
