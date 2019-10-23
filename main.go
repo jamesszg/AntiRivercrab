@@ -100,7 +100,7 @@ func (ar *AntiRivercrab) onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) 
 		Sign            string `json:"sign"`
 	}
 
-	ar.log.Infof("处理请求响应 -> %s", path(ctx.Req))
+	//ar.log.Infof("处理请求响应 -> %s", path(ctx.Req))
 
 	var remote string
 	if resp.Request != nil {
@@ -112,20 +112,20 @@ func (ar *AntiRivercrab) onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) 
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		ar.log.Errorf("读取响应数据失败 -> %+v", err)
+		//ar.log.Errorf("读取响应数据失败 -> %+v", err)
 		resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		return resp
 	}
 	if strings.HasSuffix(ctx.Req.URL.Path,"/Index/getDigitalSkyNbUid"){
 		data, err := cipher.AuthCodeDecodeB64Default(string(body)[1:])
 		if err != nil {
-			ar.log.Errorf("解析Uid数据失败 -> %+v", err)
+			//ar.log.Errorf("解析Uid数据失败 -> %+v", err)
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			return resp
 		}
 		uid := Uid{}
 		if err := json.Unmarshal([]byte(data), &uid); err != nil {
-			ar.log.Errorf("解析JSON数据失败 -> %+v", err)
+			//ar.log.Errorf("解析JSON数据失败 -> %+v", err)
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			return resp
 		}
@@ -134,27 +134,27 @@ func (ar *AntiRivercrab) onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) 
 			time: time.Now().Unix(),
 		}
 		ar.sign[remote] = info
-		ar.log.Infof("解析Uid成功")
+		//ar.log.Infof("解析Uid成功")
 		resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		return resp
 	} else if strings.HasSuffix(ctx.Req.URL.Path,"/Index/index"){
 		sign := ar.sign[remote].sign
 		data, err := cipher.AuthCodeDecodeB64(string(body)[1:], sign, true)
 		if err != nil {
-			ar.log.Errorf("解析用户数据失败 -> %+v", err)
+			//ar.log.Errorf("解析用户数据失败 -> %+v", err)
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			return resp
 		}
-		ar.log.Infof("解析用户数据成功")
+		//ar.log.Infof("解析用户数据成功")
 		body = []byte(regexp.MustCompile(ar.pattern).ReplaceAll([]byte(data), []byte(ar.replacement)))
 		tmp,err := cipher.AuthCodeEncodeB64(string(body),sign)
 		body = []byte("#" + tmp)
 		if(err != nil){
-			ar.log.Errorf("打包用户数据失败 -> %+v", err)
+			//ar.log.Errorf("打包用户数据失败 -> %+v", err)
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			return resp
 		}
-		ar.log.Tipsf("AntiRivercrab行动成功")
+		//ar.log.Tipsf("AntiRivercrab行动成功")
 	}
 	resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 	return resp
@@ -162,10 +162,10 @@ func (ar *AntiRivercrab) onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) 
 
 func (ar *AntiRivercrab) condition() goproxy.ReqConditionFunc {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
-		ar.log.Infof("请求 -> %s", path(req))
+		//ar.log.Infof("请求 -> %s", path(req))
 		if strings.HasSuffix(req.Host, "ppgame.com") {
 			if strings.HasSuffix(req.URL.Path, "/Index/index") || strings.HasSuffix(req.URL.Path, "/Index/getDigitalSkyNbUid"){
-				ar.log.Infof("请求通过 -> %s", path(req))
+				//ar.log.Infof("请求通过 -> %s", path(req))
 				return true
 			}
 		}
