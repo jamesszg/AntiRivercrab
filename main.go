@@ -73,6 +73,12 @@ func (ar *AntiRivercrab) Run() error {
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Logger = new(util.NilLogger)
 	proxy.OnResponse(ar.condition()).DoFunc(ar.onResponse)
+
+	proxy.OnRequest(ar.block()).DoFunc(
+		func(r *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+			return r, goproxy.NewResponse(r, goproxy.ContentTypeText, http.StatusForbidden, "abuse of this service is not allowed!")
+		})
+
 	srv := &http.Server{
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -170,6 +176,17 @@ func (ar *AntiRivercrab) condition() goproxy.ReqConditionFunc {
 			}
 		}
 		return false
+	}
+}
+
+func (ar *AntiRivercrab) block() goproxy.ReqConditionFunc {
+	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
+		if strings.HasSuffix(req.Host, "ppgame.com") {
+			return false
+		}else{
+			//ar.log.Infof("请求拒绝 -> %s", path(req))
+			return true
+		}
 	}
 }
 
