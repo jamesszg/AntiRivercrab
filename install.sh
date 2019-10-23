@@ -6,7 +6,6 @@ git clone --recursive git@github.com:xxzl0130/AntiRivercrab.git
 cd AntiRivercrab
 git checkout server
 go build -o AntiRivercrab ./main.go
-mkdir /usr/bin/AntiRivercrab
 mkdir /etc/AntiRivercrab
 cp ./AntiRivercrab /usr/bin/
 cp -r ./PACFile /etc/AntiRivercrab/
