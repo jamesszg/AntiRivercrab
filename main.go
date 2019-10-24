@@ -29,6 +29,8 @@ type AntiRivercrab struct {
 	sign map[string]SignInfo
 	pattern string
 	replacement string
+	host *regexp.Regexp
+	url *regexp.Regexp
 }
 
 func main() {
@@ -42,6 +44,8 @@ func main() {
 		sign : make(map[string]SignInfo) ,
 		pattern : "\"naive_build_gun_formula\":\"(\\d+:\\d+:\\d+:\\d+)?\"",
 		replacement : "\"naive_build_gun_formula\":\"33:33:33:33\"",
+		host : regexp.MustCompile(".*\\.ppgame\\.com"),
+		url : regexp.MustCompile("(index\\.php(\\/.*\\/Index\\/index)*)|(cn_mica_new\\/.*)|(auth)|(xy\\/.*)|(Config\\/.*)"),
 	}
 	if err := ar.Run(); err != nil {
 		ar.log.Fatalf("程序启动失败 -> %+v", err)
@@ -181,10 +185,9 @@ func (ar *AntiRivercrab) condition() goproxy.ReqConditionFunc {
 
 func (ar *AntiRivercrab) block() goproxy.ReqConditionFunc {
 	return func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
-		if strings.HasSuffix(req.Host, "ppgame.com") {
+		if ar.host.MatchString(req.Host) && ar.url.MatchString(req.URL.Path) {
 			return false
 		}else{
-			//ar.log.Infof("请求拒绝 -> %s", path(req))
 			return true
 		}
 	}
