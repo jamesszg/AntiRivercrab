@@ -5,6 +5,9 @@ apt-get install golang-go git -y
 git clone --recursive git@github.com:xxzl0130/AntiRivercrab.git
 cd AntiRivercrab
 git checkout server
+cd GF_cipher
+git checkout master
+cd ..
 go build -o AntiRivercrab ./main.go
 mkdir /etc/AntiRivercrab
 cp ./AntiRivercrab /usr/bin/
