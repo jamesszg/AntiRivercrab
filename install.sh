@@ -8,7 +8,7 @@ git checkout server
 go build -o AntiRivercrab ./main.go
 mkdir /etc/AntiRivercrab
 cp ./AntiRivercrab /usr/bin/
-cp -r ./PACFile /etc/AntiRivercrab/
+cp -rf ./PACFile /etc/AntiRivercrab/
 cp ./ar.sh /etc/init.d
 chmod 755 /etc/init.d/ar.sh
 update-rc.d ar.sh defaults 95
