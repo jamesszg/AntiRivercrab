@@ -11,6 +11,7 @@ import (
 	"strings"
 	"regexp"
 	"path/filepath"
+	"sync"
 
 	"github.com/elazarl/goproxy"
 	"github.com/pkg/errors"
@@ -31,6 +32,7 @@ type AntiRivercrab struct {
 	replacement string
 	host *regexp.Regexp
 	url *regexp.Regexp
+	mutex *sync.RWMutex
 }
 
 func main() {
@@ -45,7 +47,8 @@ func main() {
 		pattern : "\"naive_build_gun_formula\":\"(\\d+:\\d+:\\d+:\\d+)?\"",
 		replacement : "\"naive_build_gun_formula\":\"33:33:33:33\"",
 		host : regexp.MustCompile(".*\\.ppgame\\.com"),
-		url : regexp.MustCompile("(index\\.php(\\/.*\\/Index\\/index)*)|(cn_mica_new\\/.*)|(auth)|(xy\\/.*)|(Config\\/.*)"),
+		url : regexp.MustCompile("(index\\.php(\\/.*\\/Index\\/index)*)|(cn_mica_new\\/.*)|(auth)|(xy\\/.*)|(Config\\/.*)|(normal_login)"),
+		mutex : new(sync.RWMutex),
 	}
 	if err := ar.Run(); err != nil {
 		ar.log.Fatalf("程序启动失败 -> %+v", err)
@@ -56,12 +59,18 @@ func (ar *AntiRivercrab) watchdog(){
 	for{
 		time.Sleep(time.Second * 60 * 10)
 		now := time.Now().Unix()
+		nMap := make(map[string]SignInfo)
+		ar.mutex.RLock()
 		for k,v := range ar.sign{
-			if now - v.time > (60 * 10){
-				fmt.Printf("delete %s\n",k)
-				delete(ar.sign,k)
+			if now - v.time < (60 * 10){
+				// 拷贝未超时的值
+				nMap[k] = v
 			}
 		}
+		ar.mutex.RUnlock()
+		ar.mutex.Lock()
+		ar.sign = nMap
+		ar.mutex.Unlock()
 	}
 }
 
@@ -110,7 +119,7 @@ func (ar *AntiRivercrab) onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) 
 		Sign            string `json:"sign"`
 	}
 
-	ar.log.Infof("处理请求响应 -> %s", path(ctx.Req))
+	//ar.log.Infof("处理请求响应 -> %s", path(ctx.Req))
 
 	var remote string
 	if resp.Request != nil {
@@ -122,20 +131,20 @@ func (ar *AntiRivercrab) onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) 
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		ar.log.Errorf("读取响应数据失败 -> %+v", err)
+		//ar.log.Errorf("读取响应数据失败 -> %+v", err)
 		resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		return resp
 	}
 	if strings.HasSuffix(ctx.Req.URL.Path,"/Index/getDigitalSkyNbUid"){
 		data, err := cipher.AuthCodeDecodeB64Default(string(body)[1:])
 		if err != nil {
-			ar.log.Errorf("解析Uid数据失败 -> %+v", err)
+			//ar.log.Errorf("解析Uid数据失败 -> %+v", err)
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			return resp
 		}
 		uid := Uid{}
 		if err := json.Unmarshal([]byte(data), &uid); err != nil {
-			ar.log.Errorf("解析JSON数据失败 -> %+v", err)
+			//ar.log.Errorf("解析JSON数据失败 -> %+v", err)
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			return resp
 		}
@@ -143,28 +152,32 @@ func (ar *AntiRivercrab) onResponse(resp *http.Response, ctx *goproxy.ProxyCtx) 
 			sign: uid.Sign,
 			time: time.Now().Unix(),
 		}
+		ar.mutex.Lock()
 		ar.sign[remote] = info
-		ar.log.Infof("解析Uid成功")
+		ar.mutex.Unlock()
+		//ar.log.Infof("解析Uid成功")
 		resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 		return resp
 	} else if strings.HasSuffix(ctx.Req.URL.Path,"/Index/index"){
+		ar.mutex.RLock()
 		sign := ar.sign[remote].sign
+		ar.mutex.RUnlock()
 		data, err := cipher.AuthCodeDecodeB64(string(body)[1:], sign, true)
 		if err != nil {
-			ar.log.Errorf("解析用户数据失败 -> %+v", err)
+			//ar.log.Errorf("解析用户数据失败 -> %+v", err)
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			return resp
 		}
-		ar.log.Infof("解析用户数据成功")
+		//ar.log.Infof("解析用户数据成功")
 		body = []byte(regexp.MustCompile(ar.pattern).ReplaceAll([]byte(data), []byte(ar.replacement)))
 		tmp,err := cipher.AuthCodeEncodeB64(string(body),sign)
 		body = []byte("#" + tmp)
 		if(err != nil){
-			ar.log.Errorf("打包用户数据失败 -> %+v", err)
+			//ar.log.Errorf("打包用户数据失败 -> %+v", err)
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 			return resp
 		}
-		ar.log.Tipsf("AntiRivercrab行动成功")
+		//ar.log.Tipsf("AntiRivercrab行动成功")
 	}
 	resp.Body = ioutil.NopCloser(bytes.NewBuffer(body))
 	return resp
@@ -188,6 +201,7 @@ func (ar *AntiRivercrab) block() goproxy.ReqConditionFunc {
 		if ar.host.MatchString(req.Host) && ar.url.MatchString(req.URL.Path) {
 			return false
 		}else{
+			//ar.log.Infof("请求拒绝 -> %s", path(req))
 			return true
 		}
 	}
