@@ -10,4 +10,4 @@
 ### END INIT INFO
 
 cd /etc/AntiRivercrab
-/usr/bin/AntiRivercrab
+./AntiRivercrab
